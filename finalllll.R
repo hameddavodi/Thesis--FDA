@@ -7,12 +7,12 @@ library(fda)
 options(warn=-1)
 
 # Set working directory to where the data files are located
-setwd("~/Desktop/New Folder With Items")
+setwd("/Users/MEDIA MARK/Desktop/thesis/")
 
 # Load data from CSV files
 grw = read.csv("GDP g.csv")  # GDP growth data
 ipc = read.csv("GDP y.csv")  # GDP per capita data
-fdi = read.csv("FDI r.csv")  # Foreign Direct Investment data
+fdi = read.csv("FDI r.csv")  # Financial Development index data
 
 # Convert data frames to matrices and remove the last row if necessary
 grw = as.matrix(grw)
@@ -30,7 +30,7 @@ Time = 1980:2020
 rangeval <- range(Time)
 
 # Set the number of basis functions to use
-nbasis <- 35  # Adjust this number as needed
+nbasis <- 4  # Adjust this number as needed
 
 # Create Fourier basis functions for each data set
 grw_basis <- create.fourier.basis(rangeval, nbasis)  # For GDP growth
@@ -281,11 +281,6 @@ if (!exists("result")) {
 # Re-define the number of basis functions if needed
 nbasis <- 35  # Adjust as needed; 21 was correct in previous runs
 
-# Create the Fourier basis for each functional object
-grw_basis <- create.fourier.basis(rangeval, nbasis)
-ipc_basis <- create.fourier.basis(rangeval, nbasis)
-fdi_basis <- create.fourier.basis(rangeval, nbasis)
-
 # Use the registered functional data
 grw_fd <- grw_fd_registered$registered$regfd  # Registered GDP growth functions
 ipc_fd <- ipc_fd_registered$registered$regfd  # Registered GDP per capita functions
@@ -385,14 +380,6 @@ model_pffr <- pffr(
 
 # Summarize the model
 summary(model_pffr)
-
-coef(
-  model_pffr,
-  raw = FALSE,
-  se = TRUE,
-  freq = FALSE,
-  sandwich = FALSE,
-  seWithMean = TRUE)
 
 plot(model_pffr)
 
@@ -797,7 +784,7 @@ for (region in unique_regions) {
 }
 
 # Get unique income levels
-unique_income_levels <- levels(income_levels)
+unique_income_levels <- levels(income_level)
 
 # Initialize a list to store regression results
 regression_results_income <- list()
@@ -1050,3 +1037,4 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = IncomeLevel, shape = Cluster)
   geom_point(size = 3) +
   labs(title = "Country Clusters Colored by Income Level") +
   theme_minimal()
+
