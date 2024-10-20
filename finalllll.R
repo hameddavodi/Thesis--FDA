@@ -7,7 +7,7 @@ library(fda)
 options(warn=-1)
 
 # Set working directory to where the data files are located
-setwd("/Users/MEDIA MARK/Desktop/thesis/")
+setwd("~/Desktop/New Folder With Items/")
 
 # Load data from CSV files
 grw = read.csv("GDP g.csv")  # GDP growth data
@@ -22,15 +22,84 @@ fdi = as.matrix(fdi[-nrow(fdi), ])
 # Define the time sequence from 1980 to 2020
 Time = 1980:2020
 
-###############################################################################
-# Section 2: Defining Basis Functions for Functional Data Smoothing
-###############################################################################
-
 # Define the range of the data
 rangeval <- range(Time)
 
+###############################################################################
+# Section 2: Using GCV to Select Optimal Number of Basis Functions
+###############################################################################
+
+# Define a range of possible nbasis values to evaluate
+nbasis_range <- 3:40  # You can adjust this range as needed
+
+# Initialize vectors to store GCV values
+grw_gcv <- numeric(length(nbasis_range))
+ipc_gcv <- numeric(length(nbasis_range))
+fdi_gcv <- numeric(length(nbasis_range))
+
+# Loop over nbasis values to compute GCV for each data set
+for (i in seq_along(nbasis_range)) {
+  # Create Fourier basis for each nbasis value
+  grw_basis <- create.fourier.basis(rangeval, nbasis_range[i])
+  ipc_basis <- create.fourier.basis(rangeval, nbasis_range[i])
+  fdi_basis <- create.fourier.basis(rangeval, nbasis_range[i])
+  
+  # Smooth the data using the defined basis and functional parameters
+  grw_gcv[i] <- smooth.basis(Time, grw, fdPar(grw_basis, Lfdobj = 2, lambda = 0.0001))$gcv
+  ipc_gcv[i] <- smooth.basis(Time, ipc, fdPar(ipc_basis, Lfdobj = 2, lambda = 0.0001))$gcv
+  fdi_gcv[i] <- smooth.basis(Time, fdi, fdPar(fdi_basis, Lfdobj = 2, lambda = 0.0001))$gcv
+}
+
+# Plot GCV values to visualize the optimal nbasis
+par(mfrow=c(3,1))  # Set up a 3x1 plotting layout
+
+plot(nbasis_range, grw_gcv, type = "b", main = "GCV for GDP Growth", xlab = "Number of Basis Functions", ylab = "GCV")
+plot(nbasis_range, ipc_gcv, type = "b", main = "GCV for GDP per Capita", xlab = "Number of Basis Functions", ylab = "GCV")
+plot(nbasis_range, fdi_gcv, type = "b", main = "GCV for FDI", xlab = "Number of Basis Functions", ylab = "GCV")
+
+par(mfrow=c(1,1))  # Reset layout
+
+# Find the nbasis that minimizes GCV for each data set
+optimal_grw_nbasis <- nbasis_range[which.min(grw_gcv)]
+optimal_ipc_nbasis <- nbasis_range[which.min(ipc_gcv)]
+optimal_fdi_nbasis <- nbasis_range[which.min(fdi_gcv)]
+
+# Create Fourier basis functions with the optimal number of basis
+grw_basis_opt <- create.fourier.basis(rangeval, optimal_grw_nbasis)
+ipc_basis_opt <- create.fourier.basis(rangeval, optimal_ipc_nbasis)
+fdi_basis_opt <- create.fourier.basis(rangeval, optimal_fdi_nbasis)
+
+# Define functional parameter objects
+grw_fdPar_opt <- fdPar(grw_basis_opt, Lfdobj = 2, lambda = 0.0001)
+ipc_fdPar_opt <- fdPar(ipc_basis_opt, Lfdobj = 2, lambda = 0.0001)
+fdi_fdPar_opt <- fdPar(fdi_basis_opt, Lfdobj = 2, lambda = 0.0001)
+
+# Smooth the data using the optimal number of basis functions
+grw_fd_opt <- smooth.basis(Time, grw, grw_fdPar_opt)$fd
+ipc_fd_opt <- smooth.basis(Time, ipc, ipc_fdPar_opt)$fd
+fdi_fd_opt <- smooth.basis(Time, fdi, fdi_fdPar_opt)$fd
+
+# Calculate the mean of each optimized functional data object
+grw_mean_fd_opt <- mean.fd(grw_fd_opt)
+ipc_mean_fd_opt <- mean.fd(ipc_fd_opt)
+fdi_mean_fd_opt <- mean.fd(fdi_fd_opt)
+
+# Plot the mean functions
+par(mfrow=c(3,1))  # Set up a 3x1 plotting layout
+
+plot(grw_mean_fd_opt, main = "Mean of Optimized GDP Growth Functions", xlab = "Year", ylab = "GDP Growth")
+plot(ipc_mean_fd_opt, main = "Mean of Optimized GDP per Capita Functions", xlab = "Year", ylab = "GDP per Capita")
+plot(fdi_mean_fd_opt, main = "Mean of Optimized FDI Functions", xlab = "Year", ylab = "FDI")
+
+par(mfrow=c(1,1))  # Reset layout
+
+
+###############################################################################
+# OR Defining Basis Functions for Functional Data Smoothing
+###############################################################################
+
 # Set the number of basis functions to use
-nbasis <- 4  # Adjust this number as needed
+nbasis <- 6  # Adjust this number as needed
 
 # Create Fourier basis functions for each data set
 grw_basis <- create.fourier.basis(rangeval, nbasis)  # For GDP growth
@@ -38,9 +107,9 @@ ipc_basis <- create.fourier.basis(rangeval, nbasis)  # For GDP per capita
 fdi_basis <- create.fourier.basis(rangeval, nbasis)  # For FDI
 
 # Define functional parameter objects with smoothing parameter lambda
-grw_fdPar <- fdPar(grw_basis, Lfdobj = 2, lambda = 0.01)  # For GDP growth
-ipc_fdPar <- fdPar(ipc_basis, Lfdobj = 2, lambda = 0.01)  # For GDP per capita
-fdi_fdPar <- fdPar(fdi_basis, Lfdobj = 2, lambda = 0.01)  # For FDI
+grw_fdPar <- fdPar(grw_basis, Lfdobj = 2, lambda = 0.0001)  # For GDP growth
+ipc_fdPar <- fdPar(ipc_basis, Lfdobj = 2, lambda = 0.0001)  # For GDP per capita
+fdi_fdPar <- fdPar(fdi_basis, Lfdobj = 2, lambda = 0.0001)  # For FDI
 
 ###############################################################################
 # Section 3: Smoothing the Functional Data
@@ -56,25 +125,32 @@ grw_y2c <- smooth.basis(Time, grw, grw_basis)$y2cMap
 ipc_y2c <- smooth.basis(Time, ipc, ipc_basis)$y2cMap
 fdi_y2c <- smooth.basis(Time, fdi, fdi_basis)$y2cMap
 
-# Get the country names from the cleaned data
-countries <- colnames(grw)
 
 # Load regional data and align with country data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv", stringsAsFactors = FALSE)
-regional <- regional[regional$Country %in% countries, ]  # Filter to include only present countries
-regional <- regional[match(countries, regional$Country), ]  # Ensure the order matches
+regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
+
+# Replace periods (.) with spaces in the grw column names
+colnames(grw) <- gsub("\\.", " ", colnames(grw))
+
+# Now, match the country names with the regional data
+countries <- colnames(grw)
+regional_cleaned <- regional[regional$Country %in% countries, ]  # Filter to include only present countries
+regional_cleaned <- regional_cleaned[match(countries, regional_cleaned$Country), ]  # Ensure the order matches
+
+# Check if there are any NA values after the fix
+sum(is.na(regional_cleaned$Country))  # This should be 0 if all matches are correct
 
 ###############################################################################
 # Section 4: Registration of Functional Data
 ###############################################################################
 
 # Define a more flexible basis for the warping functions
-Wnbasis <- 7  # Number of basis functions for warping; adjust as needed
+Wnbasis <- 7  # Number of basis functions for warping;
 Wbasis <- create.bspline.basis(rangeval = range(Time), nbasis = Wnbasis)
 Wfd0 <- fd(matrix(0, Wnbasis, 1), Wbasis)
 
 # Set up the functional parameter object for warping functions
-WfdParobj <- fdPar(Wfd0, Lfdobj = 2, lambda = 0.01)
+WfdParobj <- fdPar(Wfd0, Lfdobj = 2, lambda = 0.0001)
 
 #---------------------------- Registration of FDI Data ----------------------------#
 
@@ -279,7 +355,7 @@ if (!exists("result")) {
 ###############################################################################
 
 # Re-define the number of basis functions if needed
-nbasis <- 35  # Adjust as needed; 21 was correct in previous runs
+nbasis <- 10  # Adjust as needed; 21 was correct in previous runs
 
 # Use the registered functional data
 grw_fd <- grw_fd_registered$registered$regfd  # Registered GDP growth functions
@@ -325,6 +401,37 @@ fRegress_result <- fRegress(grw_fd, X_list, betalist)
 
 # Extract and plot the beta functions
 beta_estimates <- fRegress_result$betaestlist
+
+# Extract the predicted values (yhat)
+yhat_fd <- fRegress_result$yhatfdobj
+
+# yhat_fd is a functional data object (fd class), and you can evaluate it over the time grid
+Time <- seq(1980, 2020, length.out = 100)  # Adjust the time grid as per your data
+
+# Evaluate the predicted values over the time grid
+yhat_values <- eval.fd(Time, yhat_fd)
+
+# Now you can work with the predicted values (yhat_values)
+print(head(yhat_values))  # Print a preview of the predicted values
+
+# Optionally, plot the predicted values
+matplot(Time, yhat_values, type = "l", main = "Predicted Yhat (GRW)", xlab = "Time", ylab = "Predicted Value")
+plot(grw_fd_registered$original, main = "Original GRW Functions")
+
+f_stat_result = Fstat.fd(grw_fd_registered$original,yhat_fd)
+
+# f_stat_result contains the F-statistic at each time point
+# Extract the F-statistic values and time points
+F_values <- f_stat_result$F
+Time <- f_stat_result$argvals  # These are the time points
+
+# Plot the F-statistic over time
+plot(Time, F_values, type = "l", col = "blue", lwd = 2,
+     main = "F-statistic for Model Fit (GRW vs Predicted)",
+     xlab = "Time", ylab = "F-statistic")
+
+# Optionally, you can add a horizontal line at F = 1 (threshold for significance)
+abline(h = 1, col = "red", lty = 2)
 
 # Plot beta functions
 plot(beta_estimates[[1]], main = "Beta 0 (Intercept)")
@@ -381,7 +488,7 @@ model_pffr <- pffr(
 # Summarize the model
 summary(model_pffr)
 
-plot(model_pffr)
+# plot(model_pffr)
 
 # Flatten the response and predictors for 'gam' model
 Y_vector <- as.vector(t(Y_mat))
@@ -413,7 +520,7 @@ gam_model <- gam(
 # Summarize the model
 summary(gam_model)
 
-plot(gam_model)
+# plot(gam_model)
 
 # Function to plot the estimated coefficient surfaces from 'gam' model
 plot_beta_surface_gam <- function(gam_model, term_label, predictor_name) {
@@ -511,7 +618,7 @@ for (i in 1:length(fRegress_result$betaestlist)) {
 }
 
 # Load regional data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv", stringsAsFactors = FALSE)
+regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
 
 # After data cleaning, get the list of countries
 countries <- colnames(grw)
@@ -549,8 +656,6 @@ for (region in unique_regions) {
   if (length(depth_region) >= 1 && length(depth_other) >= 1) {
     test_result <- wilcox.test(depth_region, depth_other)
     wilcox_results_region[[region]] <- test_result
-  } else {
-    wilcox_results_region[[region]] <- NA
   }
 }
 
@@ -573,8 +678,6 @@ for (level in unique_Income.Range) {
   if (length(depth_level) >= 1 && length(depth_other) >= 1) {
     test_result <- wilcox.test(depth_level, depth_other)
     wilcox_results_income[[level]] <- test_result
-  } else {
-    wilcox_results_income[[level]] <- NA
   }
 }
 
@@ -601,7 +704,7 @@ for (i in 1:length(fRegress_result$betaestlist)) {
 }
 
 # Boxplot visualization of depth values by region and income level
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv", stringsAsFactors = FALSE)
+regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
 
 regional <- regional[regional$Country %in% countries, ]
 regional <- regional[match(countries, regional$Country), ]
@@ -649,7 +752,7 @@ ggboxplot(depth_data, x = "IncomeLevel", y = "Depth", fill = "IncomeLevel") +
   stat_compare_means(method = "wilcox.test", label = "p.signif") +
   labs(title = "Depth Values by Income Level", x = "Income Level", y = "Depth") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
+par(mfrow = c(1, 1))  # Reset layout
 # Compute and plot acceleration (second derivative) for GRW data
 accel_fd <- deriv.fd(grw_fd, deriv = 2)
 accel_values <- eval.fd(Time, accel_fd)
@@ -658,11 +761,12 @@ accel_values <- eval.fd(Time, accel_fd)
 matplot(Time, accel_values, type = 'l', lty = 1, col = 'grey',
         xlab = 'Years', ylab = 'Acceleration', main = 'Acceleration Curves for All Countries (GRW)')
 
+
 # Compute and plot the mean acceleration curve
 mean_accel <- rowMeans(accel_values)
 lines(Time, mean_accel, col = 'red', lwd = 2)
 legend("topright", legend = c("Mean Acceleration"), col = c("red"), lty = 1, lwd = 2)
-
+par(mfrow = c(1, 1))  # Reset layout
 # Compute and plot acceleration for FDI data
 accel_fd <- deriv.fd(fdi_fd, deriv = 2)
 accel_values <- eval.fd(Time, accel_fd)
@@ -671,7 +775,7 @@ matplot(Time, accel_values, type = 'l', lty = 1, col = 'grey',
 mean_accel <- rowMeans(accel_values)
 lines(Time, mean_accel, col = 'red', lwd = 2)
 legend("topright", legend = c("Mean Acceleration"), col = c("red"), lty = 1, lwd = 2)
-
+par(mfrow = c(1, 1))  # Reset layout
 # Compute and plot acceleration for IPC data
 accel_fd <- deriv.fd(ipc_fd, deriv = 2)
 accel_values <- eval.fd(Time, accel_fd)
@@ -680,7 +784,7 @@ matplot(Time, accel_values, type = 'l', lty = 1, col = 'grey',
 mean_accel <- rowMeans(accel_values)
 lines(Time, mean_accel, col = 'red', lwd = 2)
 legend("topright", legend = c("Mean Acceleration"), col = 'red', lty = 1, lwd = 2)
-
+par(mfrow = c(1, 1))  # Reset layout
 # Compute mean acceleration for each country
 mean_accel_countries <- colMeans(accel_values)
 
@@ -697,12 +801,14 @@ ggplot(accel_data, aes(x = Region, y = MeanAcceleration)) +
   geom_boxplot(fill = "orange") +
   labs(title = "Mean Acceleration by Region", x = "Region", y = "Mean Acceleration") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
+par(mfrow = c(1, 1))  # Reset layout
 # Plot mean acceleration by income level
 ggplot(accel_data, aes(x = IncomeLevel, y = MeanAcceleration)) +
   geom_boxplot(fill = "purple") +
   labs(title = "Mean Acceleration by Income Level", x = "Income Level", y = "Mean Acceleration") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+par(mfrow = c(1, 1))  # Reset layout
+
 
 # Perform ANOVA for region
 anova_accel_region <- aov(MeanAcceleration ~ Region, data = accel_data)
@@ -1009,7 +1115,7 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = Cluster, label = Country)) +
   theme_minimal()
 
 # Load region and income level data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv", stringsAsFactors = FALSE)
+regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
 
 # Ensure alignment
 regional <- regional[match(country_data$Country, regional$Country), ]
@@ -1038,3 +1144,321 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = IncomeLevel, shape = Cluster)
   labs(title = "Country Clusters Colored by Income Level") +
   theme_minimal()
 
+
+
+###############################################################################
+# Section 7: Statistical Analysis and Inference (Continued)
+###############################################################################
+
+# Load necessary library
+###############################################################################
+# Section 7: Statistical Analysis and Inference (Continued)
+###############################################################################
+
+# Load necessary library
+library(fda.usc)
+
+# Count the number of countries in each region
+region_counts <- table(regions)
+print(region_counts)
+
+# Identify regions with only one country
+regions_single_country <- names(region_counts[region_counts == 1])
+print("Regions with only one country:")
+print(regions_single_country)
+
+# Exclude countries from regions with only one country
+indices_to_keep <- !regions %in% regions_single_country
+
+# Subset the data
+grw_fdata_subset <- grw_fdata[indices_to_keep, ]
+regions_subset <- regions[indices_to_keep]
+
+# Perform FANOVA on the subset
+fanova_region <- fanova.onefactor(grw_fdata_subset, factor(regions_subset))
+
+# Display results
+print(fanova_region)
+
+# Extract the time range for xlim (use the same time grid as the functional data)
+xlim_range <- range(Time_fdata)
+ylim_range <- range(fanova_region$wm)
+# Plot with the correct xlim argument
+plot(fanova_region$wm, 
+     main = "Functional ANOVA by Region (Excluding Single-Country Regions)")
+
+
+###############################################################################
+# Section 8: Functional Regression by Regions and Income Levels (Revised)
+###############################################################################
+
+# Function to perform regression for a subset of countries
+perform_regression <- function(country_indices, group_name) {
+  # Subset the functional data objects
+  grw_fd_subset <- grw_fd[country_indices]
+  ipc_fd_subset <- ipc_fd[country_indices]
+  fdi_fd_subset <- fdi_fd[country_indices]
+  
+  # Recompute the interaction term
+  ipc_eval_subset <- eval.fd(Time, ipc_fd_subset)
+  fdi_eval_subset <- eval.fd(Time, fdi_fd_subset)
+  ipc_fdi_interaction_subset <- ipc_eval_subset * fdi_eval_subset
+  ipc_fdi_fd_subset <- smooth.basis(Time, ipc_fdi_interaction_subset, ipc_basis)$fd
+  
+  # Define the intercept
+  const_basis <- create.constant.basis(rangeval)
+  const_fd <- fd(matrix(1, 1, length(country_indices)), const_basis)
+  
+  # Define the list of predictors
+  X_list_subset <- list(
+    const = const_fd,
+    ipc_fd = ipc_fd_subset,
+    fdi_fd = fdi_fd_subset,
+    ipc_fdi_fd = ipc_fdi_fd_subset
+  )
+  
+  # Define basis for beta functions
+  beta_basis <- create.fourier.basis(rangeval, nbasis)
+  betalist <- list(
+    const = fdPar(const_basis),
+    ipc_fd = fdPar(beta_basis),
+    fdi_fd = fdPar(beta_basis),
+    ipc_fdi_fd = fdPar(beta_basis)
+  )
+  
+  # Perform the functional regression
+  fRegress_result <- fRegress(grw_fd_subset, X_list_subset, betalist)
+  
+  # Extract beta functions
+  beta_estimates <- fRegress_result$betaestlist
+  
+  # Plot beta functions
+  par(mfrow = c(2, 2))  # Set up layout for plotting
+  for (i in 1:length(beta_estimates)) {
+    beta_fd <- beta_estimates[[i]]$fd
+    plot(beta_fd, main = paste("Beta", i - 1, "for", group_name))
+  }
+  par(mfrow = c(1, 1))  # Reset layout
+  
+  # Return results
+  list(
+    fRegress_result = fRegress_result,
+    beta_estimates = beta_estimates,
+    group_name = group_name
+  )
+}
+
+# Get unique regions
+unique_regions <- unique(regions)
+
+# Initialize a list to store regression results
+regression_results_regions <- list()
+
+for (region in unique_regions) {
+  # Get indices of countries in this region
+  country_indices <- which(regions == region)
+  
+  # Check if there are enough countries (at least equal to the number of predictors)
+  if (length(country_indices) >= 4) {
+    result <- perform_regression(country_indices, region)
+    regression_results_regions[[region]] <- result
+  } else {
+    cat("Not enough countries in region:", region, "\n")
+  }
+}
+
+# Get unique income levels
+unique_income_levels <- unique(income_level)
+
+# Initialize a list to store regression results
+regression_results_income <- list()
+
+for (level in unique_income_levels) {
+  # Get indices of countries in this income level
+  country_indices <- which(income_level == level)
+  
+  # Check if there are enough countries (at least equal to the number of predictors)
+  if (length(country_indices) >= 4) {
+    result <- perform_regression(country_indices, level)
+    regression_results_income[[level]] <- result
+  } else {
+    cat("Not enough countries in income level:", level, "\n")
+  }
+}
+
+
+
+###############################################################################
+# Section 11: Covariance Heat Maps and 3D Plots
+###############################################################################
+
+# Function to compute and plot covariance heat map and 3D surface
+plot_covariance <- function(fd_obj, var_name) {
+  # Evaluate the functional data at fine grid points
+  finegrid <- seq(min(Time), max(Time), length.out = 100)
+  fd_values <- eval.fd(finegrid, fd_obj)
+  
+  # Compute the covariance matrix
+  cov_matrix <- cov(t(fd_values))
+  
+  # Plot heat map
+  library(ggplot2)
+  library(reshape2)
+  
+  cov_df <- melt(cov_matrix)
+  colnames(cov_df) <- c("Time1", "Time2", "Covariance")
+  
+  ggplot(cov_df, aes(x = Time1, y = Time2, fill = Covariance)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+    labs(title = paste("Covariance Heat Map of", var_name), x = "Time", y = "Time") +
+    theme_minimal()
+  
+  # 3D Surface Plot
+  library(plotly)
+  
+  plot_ly(
+    x = finegrid,
+    y = finegrid,
+    z = cov_matrix,
+    type = "surface"
+  ) %>%
+    layout(
+      title = paste("Covariance Surface Plot of", var_name),
+      scene = list(
+        xaxis = list(title = "Time"),
+        yaxis = list(title = "Time"),
+        zaxis = list(title = "Covariance")
+      )
+    )
+}
+
+# Plot covariance heat map and 3D plot for GRW
+plot_covariance(grw_fd, "GDP Growth (GRW)")
+
+# Plot covariance heat map and 3D plot for IPC
+plot_covariance(ipc_fd, "GDP per Capita (IPC)")
+
+# Plot covariance heat map and 3D plot for FDI
+plot_covariance(fdi_fd, "Financial Development Index (FDI)")
+
+
+###############################################################################
+# Section 12: Heatmaps of Beta Surfaces
+###############################################################################
+
+# Function to plot heatmap of beta surface
+plot_beta_heatmap <- function(gam_model, term_label, predictor_name) {
+  # Generate a grid for predictor and time
+  predictor_vals <- seq(min(data_long[[predictor_name]]), max(data_long[[predictor_name]]), length.out = 100)
+  t_vals <- finegrid
+  
+  pred_grid <- expand.grid(
+    predictor = predictor_vals,
+    t = t_vals
+  )
+  
+  # Set up the new data for prediction
+  newdata <- data.frame(
+    ipc = 0,
+    fdi = 0,
+    ipc_fdi = 0,
+    t = pred_grid$t
+  )
+  
+  newdata[[predictor_name]] <- pred_grid$predictor
+  
+  # Predict the effect of the smooth term
+  pred_effect <- predict(gam_model, newdata = newdata, type = "terms", terms = term_label)
+  
+  # Reshape to matrix
+  effect_matrix <- matrix(pred_effect, nrow = length(predictor_vals), ncol = length(t_vals))
+  
+  # Create a data frame for plotting
+  beta_df <- data.frame(
+    Predictor = rep(predictor_vals, times = length(t_vals)),
+    Time = rep(t_vals, each = length(predictor_vals)),
+    BetaValue = as.vector(effect_matrix)
+  )
+  
+  # Plot heatmap
+  ggplot(beta_df, aes(x = Time, y =Predictor , fill = BetaValue)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+    labs(title = paste("Heatmap of Beta(s, t) for", predictor_name), x =  "Time (t)" , y =paste(predictor_name, "(s)")) +
+    theme_minimal()
+}
+
+# Plot heatmaps for each predictor
+plot_beta_heatmap(gam_model, "te(ipc,t)", "ipc")
+plot_beta_heatmap(gam_model, "te(fdi,t)", "fdi")
+plot_beta_heatmap(gam_model, "te(ipc_fdi,t)", "ipc_fdi")
+
+###############################################################################
+# Section 13: Summary Statistics for GRW, FDI, and IPC
+###############################################################################
+
+# Function to compute summary statistics
+compute_summary_stats <- function(fd_obj, var_name) {
+  # Evaluate the functional data over the time grid
+  fd_values <- eval.fd(Time, fd_obj)
+  
+  # Compute statistics at each time point
+  mean_values <- rowMeans(fd_values)
+  median_values <- apply(fd_values, 1, median)
+  var_values <- apply(fd_values, 1, var)
+  sd_values <- sqrt(var_values)
+  
+  # Overall statistics (averaged over time)
+  overall_mean <- mean(mean_values)
+  overall_median <- median(median_values)
+  overall_variance <- mean(var_values)
+  overall_sd <- sqrt(overall_variance)
+  
+  # Compile into a data frame
+  summary_df <- data.frame(
+    Statistic = c("Overall Mean", "Overall Median", "Overall Variance", "Overall Standard Deviation"),
+    Value = c(overall_mean, overall_median, overall_variance, overall_sd)
+  )
+  
+  # Print the summary table
+  cat("\nSummary Statistics for", var_name, ":\n")
+  print(summary_df)
+  
+  # Plot the mean function with confidence bands
+  # Compute 95% confidence intervals
+  n_countries <- ncol(fd_values)
+  se_values <- sd_values / sqrt(n_countries)
+  ci_upper <- mean_values + 1.96 * se_values
+  ci_lower <- mean_values - 1.96 * se_values
+  
+  # Create a data frame for plotting
+  plot_df <- data.frame(
+    Time = Time,
+    Mean = mean_values,
+    UpperCI = ci_upper,
+    LowerCI = ci_lower
+  )
+  
+  # Load ggplot2
+  library(ggplot2)
+  
+  # Plot the mean function with confidence intervals
+  ggplot(plot_df, aes(x = Time, y = Mean)) +
+    geom_line(color = "blue", size = 1) +
+    geom_ribbon(aes(ymin = LowerCI, ymax = UpperCI), alpha = 0.2, fill = "blue") +
+    labs(title = paste("Mean Function with 95% CI for", var_name),
+         x = "Time", y = var_name) +
+    theme_minimal()
+}
+
+### $$$ add raw data
+
+# Compute and display summary statistics for GRW
+compute_summary_stats(grw_fd, "GDP Growth (GRW)")
+
+# Compute and display summary statistics for IPC
+compute_summary_stats(ipc_fd, "GDP per Capita (IPC)")
+
+# Compute and display summary statistics for FDI
+compute_summary_stats(fdi_fd, "Financial Development Index (FDI)")
