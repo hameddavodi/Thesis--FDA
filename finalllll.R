@@ -4,15 +4,20 @@
 
 # Load necessary library
 library(fda)
+library(lme4)
+library(refund)
+library(plotly)
+library(mgcv)
+
 options(warn=-1)
 
 # Set working directory to where the data files are located
-setwd("~/Desktop/New Folder With Items/")
+setwd("/Users/MEDIA MARK/Desktop/thesis/")
 
 # Load data from CSV files
-grw = read.csv("GDP g.csv")  # GDP growth data
-ipc = read.csv("GDP y.csv")  # GDP per capita data
-fdi = read.csv("FDI r.csv")  # Financial Development index data
+grw = read.csv("GDP g.csv")  # Diff GDP growth data vs USA
+ipc = read.csv("GDP y.csv")  # Diff GDP per capita data vs USA
+fdi = read.csv("FDI r.csv")  # Diff Financial Development index data vs USA
 
 # Convert data frames to matrices and remove the last row if necessary
 grw = as.matrix(grw)
@@ -25,6 +30,11 @@ Time = 1980:2020
 # Define the range of the data
 rangeval <- range(Time)
 
+# Load data from CSV files
+ipc_raw = read.csv("GDP.csv")  # GDP per capita data
+fdi_raw = read.csv("FDI.csv")  # financial development data
+ipc_raw = as.matrix(ipc_raw[-nrow(ipc_raw), ])
+fdi_raw = as.matrix(fdi_raw[-nrow(fdi_raw), ])
 ###############################################################################
 # Section 2: Using GCV to Select Optimal Number of Basis Functions
 ###############################################################################
@@ -36,6 +46,8 @@ nbasis_range <- 3:40  # You can adjust this range as needed
 grw_gcv <- numeric(length(nbasis_range))
 ipc_gcv <- numeric(length(nbasis_range))
 fdi_gcv <- numeric(length(nbasis_range))
+ipc_raw_gcv <- numeric(length(nbasis_range))
+fdi_raw_gcv <- numeric(length(nbasis_range))
 
 # Loop over nbasis values to compute GCV for each data set
 for (i in seq_along(nbasis_range)) {
@@ -43,19 +55,25 @@ for (i in seq_along(nbasis_range)) {
   grw_basis <- create.fourier.basis(rangeval, nbasis_range[i])
   ipc_basis <- create.fourier.basis(rangeval, nbasis_range[i])
   fdi_basis <- create.fourier.basis(rangeval, nbasis_range[i])
+  ipc_raw_basis <- create.fourier.basis(rangeval, nbasis_range[i])
+  fdi_raw_basis <- create.fourier.basis(rangeval, nbasis_range[i])
   
   # Smooth the data using the defined basis and functional parameters
   grw_gcv[i] <- smooth.basis(Time, grw, fdPar(grw_basis, Lfdobj = 2, lambda = 0.0001))$gcv
   ipc_gcv[i] <- smooth.basis(Time, ipc, fdPar(ipc_basis, Lfdobj = 2, lambda = 0.0001))$gcv
   fdi_gcv[i] <- smooth.basis(Time, fdi, fdPar(fdi_basis, Lfdobj = 2, lambda = 0.0001))$gcv
+  ipc_raw_gcv[i] <- smooth.basis(Time, ipc_raw, fdPar(ipc_raw_basis, Lfdobj = 2, lambda = 0.0001))$gcv
+  fdi_raw_gcv[i] <- smooth.basis(Time, fdi_raw, fdPar(fdi_raw_basis, Lfdobj = 2, lambda = 0.0001))$gcv
 }
 
 # Plot GCV values to visualize the optimal nbasis
-par(mfrow=c(3,1))  # Set up a 3x1 plotting layout
+par(mfrow=c(5,1))  # Set up a 5x1 plotting layout
 
 plot(nbasis_range, grw_gcv, type = "b", main = "GCV for GDP Growth", xlab = "Number of Basis Functions", ylab = "GCV")
 plot(nbasis_range, ipc_gcv, type = "b", main = "GCV for GDP per Capita", xlab = "Number of Basis Functions", ylab = "GCV")
 plot(nbasis_range, fdi_gcv, type = "b", main = "GCV for FDI", xlab = "Number of Basis Functions", ylab = "GCV")
+plot(nbasis_range, ipc_raw_gcv, type = "b", main = "GCV for Raw GDP per Capita", xlab = "Number of Basis Functions", ylab = "GCV")
+plot(nbasis_range, fdi_raw_gcv, type = "b", main = "GCV for Raw FDI", xlab = "Number of Basis Functions", ylab = "GCV")
 
 par(mfrow=c(1,1))  # Reset layout
 
@@ -63,35 +81,114 @@ par(mfrow=c(1,1))  # Reset layout
 optimal_grw_nbasis <- nbasis_range[which.min(grw_gcv)]
 optimal_ipc_nbasis <- nbasis_range[which.min(ipc_gcv)]
 optimal_fdi_nbasis <- nbasis_range[which.min(fdi_gcv)]
+optimal_ipc_raw_nbasis <- nbasis_range[which.min(ipc_raw_gcv)]
+optimal_fdi_raw_nbasis <- nbasis_range[which.min(fdi_raw_gcv)]
 
 # Create Fourier basis functions with the optimal number of basis
 grw_basis_opt <- create.fourier.basis(rangeval, optimal_grw_nbasis)
 ipc_basis_opt <- create.fourier.basis(rangeval, optimal_ipc_nbasis)
 fdi_basis_opt <- create.fourier.basis(rangeval, optimal_fdi_nbasis)
+ipc_raw_basis_opt <- create.fourier.basis(rangeval, optimal_ipc_raw_nbasis)
+fdi_raw_basis_opt <- create.fourier.basis(rangeval, optimal_fdi_raw_nbasis)
 
 # Define functional parameter objects
 grw_fdPar_opt <- fdPar(grw_basis_opt, Lfdobj = 2, lambda = 0.0001)
 ipc_fdPar_opt <- fdPar(ipc_basis_opt, Lfdobj = 2, lambda = 0.0001)
 fdi_fdPar_opt <- fdPar(fdi_basis_opt, Lfdobj = 2, lambda = 0.0001)
+ipc_raw_fdPar_opt <- fdPar(ipc_raw_basis_opt, Lfdobj = 2, lambda = 0.0001)
+fdi_raw_fdPar_opt <- fdPar(fdi_raw_basis_opt, Lfdobj = 2, lambda = 0.0001)
 
 # Smooth the data using the optimal number of basis functions
 grw_fd_opt <- smooth.basis(Time, grw, grw_fdPar_opt)$fd
 ipc_fd_opt <- smooth.basis(Time, ipc, ipc_fdPar_opt)$fd
 fdi_fd_opt <- smooth.basis(Time, fdi, fdi_fdPar_opt)$fd
+ipc_raw_fd_opt <- smooth.basis(Time, ipc_raw, ipc_raw_fdPar_opt)$fd
+fdi_raw_fd_opt <- smooth.basis(Time, fdi_raw, fdi_raw_fdPar_opt)$fd
 
 # Calculate the mean of each optimized functional data object
 grw_mean_fd_opt <- mean.fd(grw_fd_opt)
 ipc_mean_fd_opt <- mean.fd(ipc_fd_opt)
 fdi_mean_fd_opt <- mean.fd(fdi_fd_opt)
+ipc_raw_mean_fd_opt <- mean.fd(ipc_raw_fd_opt)
+fdi_raw_mean_fd_opt <- mean.fd(fdi_raw_fd_opt)
 
 # Plot the mean functions
-par(mfrow=c(3,1))  # Set up a 3x1 plotting layout
+par(mfrow=c(5,1))  # Set up a 5x1 plotting layout
 
 plot(grw_mean_fd_opt, main = "Mean of Optimized GDP Growth Functions", xlab = "Year", ylab = "GDP Growth")
 plot(ipc_mean_fd_opt, main = "Mean of Optimized GDP per Capita Functions", xlab = "Year", ylab = "GDP per Capita")
 plot(fdi_mean_fd_opt, main = "Mean of Optimized FDI Functions", xlab = "Year", ylab = "FDI")
+plot(ipc_raw_mean_fd_opt, main = "Mean of Optimized Raw GDP per Capita Functions", xlab = "Year", ylab = "Raw GDP per Capita")
+plot(fdi_raw_mean_fd_opt, main = "Mean of Optimized Raw FDI Functions", xlab = "Year", ylab = "Raw FDI")
 
-par(mfrow=c(1,1))  # Reset layout
+
+
+###############################################################################
+# Section 13: Summary Statistics for GRW, FDI, and IPC
+###############################################################################
+
+# Function to compute summary statistics
+compute_summary_stats <- function(fd_obj, var_name) {
+  # Evaluate the functional data over the time grid
+  fd_values <- eval.fd(Time, fd_obj)
+  
+  # Compute statistics at each time point
+  mean_values <- rowMeans(fd_values)
+  median_values <- apply(fd_values, 1, median)
+  var_values <- apply(fd_values, 1, var)
+  sd_values <- sqrt(var_values)
+  
+  # Overall statistics (averaged over time)
+  overall_mean <- mean(mean_values)
+  overall_median <- median(median_values)
+  overall_variance <- mean(var_values)
+  overall_sd <- sqrt(overall_variance)
+  
+  # Compile into a data frame
+  summary_df <- data.frame(
+    Statistic = c("Overall Mean", "Overall Median", "Overall Variance", "Overall Standard Deviation"),
+    Value = c(overall_mean, overall_median, overall_variance, overall_sd)
+  )
+  
+  # Print the summary table
+  cat("\nSummary Statistics for", var_name, ":\n")
+  print(summary_df)
+  
+  # Plot the mean function with confidence bands
+  # Compute 95% confidence intervals
+  n_countries <- ncol(fd_values)
+  se_values <- sd_values / sqrt(n_countries)
+  ci_upper <- mean_values + 1.96 * se_values
+  ci_lower <- mean_values - 1.96 * se_values
+  
+  # Create a data frame for plotting
+  plot_df <- data.frame(
+    Time = Time,
+    Mean = mean_values,
+    UpperCI = ci_upper,
+    LowerCI = ci_lower
+  )
+  
+  # Load ggplot2
+  library(ggplot2)
+  
+  # Plot the mean function with confidence intervals
+  ggplot(plot_df, aes(x = Time, y = Mean)) +
+    geom_line(color = "blue", size = 1) +
+    geom_ribbon(aes(ymin = LowerCI, ymax = UpperCI), alpha = 0.2, fill = "blue") +
+    labs(title = paste("Mean Function with 95% CI for", var_name),
+         x = "Time", y = var_name) +
+    theme_minimal()
+}
+
+# Compute and display summary statistics for GRW
+compute_summary_stats(grw_fd, "GDP Growth (GRW)")
+
+# Compute and display summary statistics for IPC
+compute_summary_stats(ipc_fd, "GDP per Capita (IPC)")
+
+# Compute and display summary statistics for FDI
+compute_summary_stats(fdi_fd, "Financial Development Index (FDI)")
 
 
 ###############################################################################
@@ -355,7 +452,7 @@ if (!exists("result")) {
 ###############################################################################
 
 # Re-define the number of basis functions if needed
-nbasis <- 10  # Adjust as needed; 21 was correct in previous runs
+nbasis <- 6  # Adjust as needed;
 
 # Use the registered functional data
 grw_fd <- grw_fd_registered$registered$regfd  # Registered GDP growth functions
@@ -415,23 +512,9 @@ yhat_values <- eval.fd(Time, yhat_fd)
 print(head(yhat_values))  # Print a preview of the predicted values
 
 # Optionally, plot the predicted values
-matplot(Time, yhat_values, type = "l", main = "Predicted Yhat (GRW)", xlab = "Time", ylab = "Predicted Value")
-plot(grw_fd_registered$original, main = "Original GRW Functions")
+# matplot(Time, yhat_values, type = "l", main = "Predicted Yhat (GRW)", xlab = "Time", ylab = "Predicted Value")
+# plot(grw_fd_registered$original, main = "Original GRW Functions")
 
-f_stat_result = Fstat.fd(grw_fd_registered$original,yhat_fd)
-
-# f_stat_result contains the F-statistic at each time point
-# Extract the F-statistic values and time points
-F_values <- f_stat_result$F
-Time <- f_stat_result$argvals  # These are the time points
-
-# Plot the F-statistic over time
-plot(Time, F_values, type = "l", col = "blue", lwd = 2,
-     main = "F-statistic for Model Fit (GRW vs Predicted)",
-     xlab = "Time", ylab = "F-statistic")
-
-# Optionally, you can add a horizontal line at F = 1 (threshold for significance)
-abline(h = 1, col = "red", lty = 2)
 
 # Plot beta functions
 plot(beta_estimates[[1]], main = "Beta 0 (Intercept)")
@@ -443,12 +526,7 @@ plot(beta_estimates[[4]], main = "Beta 3 (IPC * FDI Interaction)")
 # Section 6: Functional Regression using 'refund' Package
 ###############################################################################
 
-# Load necessary libraries
-library(lme4)
-library(refund)
-library(plotly)
-library(fda)
-library(mgcv)
+
 
 # Define a fine grid over the time domain
 finegrid <- seq(min(Time), max(Time), length.out = 100)
@@ -489,6 +567,16 @@ model_pffr <- pffr(
 summary(model_pffr)
 
 # plot(model_pffr)
+
+qq.pffr(
+  model_pffr,
+  rep = 0,
+  level = 0.9,
+  s.rep = 10,
+  type = c("deviance", "pearson", "response"),
+  pch = ".",
+  rl.col = 2,
+  rep.col = "gray80")
 
 # Flatten the response and predictors for 'gam' model
 Y_vector <- as.vector(t(Y_mat))
@@ -573,49 +661,11 @@ plot_beta_surface_gam(gam_model, "te(ipc,t)", "ipc")
 plot_beta_surface_gam(gam_model, "te(fdi,t)", "fdi")
 plot_beta_surface_gam(gam_model, "te(ipc_fdi,t)", "ipc_fdi")
 
+
+
 ###############################################################################
 # Section 7: Statistical Analysis and Inference
 ###############################################################################
-
-# Compute residuals from the functional regression
-residuals_fd <- grw_fd - fRegress_result$yhatfdobj
-residuals_matrix <- eval.fd(Time, residuals_fd)
-
-# Estimate the variance of the residuals
-sigma_squared <- var(as.vector(residuals_matrix))
-
-# Create the variance-covariance matrix
-n <- length(Time)
-SigmaE <- sigma_squared * diag(n)
-
-# Compute standard errors of the estimated beta functions
-stderr_list <- fRegress.stderr(fRegress_result, y2cMap = grw_y2c, SigmaE = SigmaE)
-
-# For each coefficient, compute t-statistics and p-values
-p_values_list <- list()  # To store p-values for each coefficient
-
-for (i in 1:length(fRegress_result$betaestlist)) {
-  beta_fd <- fRegress_result$betaestlist[[i]]$fd
-  beta_stderr_fd <- stderr_list$betastderrlist[[i]]
-  
-  # Evaluate functions at time points
-  beta_values <- eval.fd(Time, beta_fd)
-  beta_stderr_values <- eval.fd(Time, beta_stderr_fd)
-  
-  # Compute t-statistics
-  t_values <- beta_values / beta_stderr_values
-  
-  # Compute p-values
-  p_values <- 2 * (1 - pnorm(abs(t_values)))
-  
-  # Store p-values
-  p_values_list[[i]] <- p_values
-  
-  # Plot p-values over time
-  plot(Time, p_values, type = 'l', main = paste("P-values for Beta", i - 1), ylab = "P-value")
-  # Add red line where p-value is 0.1
-  abline(h = 0.1, col = "red", lty = 2)
-}
 
 # Load regional data
 regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
@@ -1147,48 +1197,6 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = IncomeLevel, shape = Cluster)
 
 
 ###############################################################################
-# Section 7: Statistical Analysis and Inference (Continued)
-###############################################################################
-
-# Load necessary library
-###############################################################################
-# Section 7: Statistical Analysis and Inference (Continued)
-###############################################################################
-
-# Load necessary library
-library(fda.usc)
-
-# Count the number of countries in each region
-region_counts <- table(regions)
-print(region_counts)
-
-# Identify regions with only one country
-regions_single_country <- names(region_counts[region_counts == 1])
-print("Regions with only one country:")
-print(regions_single_country)
-
-# Exclude countries from regions with only one country
-indices_to_keep <- !regions %in% regions_single_country
-
-# Subset the data
-grw_fdata_subset <- grw_fdata[indices_to_keep, ]
-regions_subset <- regions[indices_to_keep]
-
-# Perform FANOVA on the subset
-fanova_region <- fanova.onefactor(grw_fdata_subset, factor(regions_subset))
-
-# Display results
-print(fanova_region)
-
-# Extract the time range for xlim (use the same time grid as the functional data)
-xlim_range <- range(Time_fdata)
-ylim_range <- range(fanova_region$wm)
-# Plot with the correct xlim argument
-plot(fanova_region$wm, 
-     main = "Functional ANOVA by Region (Excluding Single-Country Regions)")
-
-
-###############################################################################
 # Section 8: Functional Regression by Regions and Income Levels (Revised)
 ###############################################################################
 
@@ -1394,71 +1402,3 @@ plot_beta_heatmap(gam_model, "te(ipc,t)", "ipc")
 plot_beta_heatmap(gam_model, "te(fdi,t)", "fdi")
 plot_beta_heatmap(gam_model, "te(ipc_fdi,t)", "ipc_fdi")
 
-###############################################################################
-# Section 13: Summary Statistics for GRW, FDI, and IPC
-###############################################################################
-
-# Function to compute summary statistics
-compute_summary_stats <- function(fd_obj, var_name) {
-  # Evaluate the functional data over the time grid
-  fd_values <- eval.fd(Time, fd_obj)
-  
-  # Compute statistics at each time point
-  mean_values <- rowMeans(fd_values)
-  median_values <- apply(fd_values, 1, median)
-  var_values <- apply(fd_values, 1, var)
-  sd_values <- sqrt(var_values)
-  
-  # Overall statistics (averaged over time)
-  overall_mean <- mean(mean_values)
-  overall_median <- median(median_values)
-  overall_variance <- mean(var_values)
-  overall_sd <- sqrt(overall_variance)
-  
-  # Compile into a data frame
-  summary_df <- data.frame(
-    Statistic = c("Overall Mean", "Overall Median", "Overall Variance", "Overall Standard Deviation"),
-    Value = c(overall_mean, overall_median, overall_variance, overall_sd)
-  )
-  
-  # Print the summary table
-  cat("\nSummary Statistics for", var_name, ":\n")
-  print(summary_df)
-  
-  # Plot the mean function with confidence bands
-  # Compute 95% confidence intervals
-  n_countries <- ncol(fd_values)
-  se_values <- sd_values / sqrt(n_countries)
-  ci_upper <- mean_values + 1.96 * se_values
-  ci_lower <- mean_values - 1.96 * se_values
-  
-  # Create a data frame for plotting
-  plot_df <- data.frame(
-    Time = Time,
-    Mean = mean_values,
-    UpperCI = ci_upper,
-    LowerCI = ci_lower
-  )
-  
-  # Load ggplot2
-  library(ggplot2)
-  
-  # Plot the mean function with confidence intervals
-  ggplot(plot_df, aes(x = Time, y = Mean)) +
-    geom_line(color = "blue", size = 1) +
-    geom_ribbon(aes(ymin = LowerCI, ymax = UpperCI), alpha = 0.2, fill = "blue") +
-    labs(title = paste("Mean Function with 95% CI for", var_name),
-         x = "Time", y = var_name) +
-    theme_minimal()
-}
-
-### $$$ add raw data
-
-# Compute and display summary statistics for GRW
-compute_summary_stats(grw_fd, "GDP Growth (GRW)")
-
-# Compute and display summary statistics for IPC
-compute_summary_stats(ipc_fd, "GDP per Capita (IPC)")
-
-# Compute and display summary statistics for FDI
-compute_summary_stats(fdi_fd, "Financial Development Index (FDI)")
