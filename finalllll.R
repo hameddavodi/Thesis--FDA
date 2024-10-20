@@ -12,7 +12,7 @@ library(mgcv)
 options(warn=-1)
 
 # Set working directory to where the data files are located
-setwd("/Users/MEDIA MARK/Desktop/thesis/")
+setwd("~/Desktop/New Folder With Items/")
 
 # Load data from CSV files
 grw = read.csv("GDP g.csv")  # Diff GDP growth data vs USA
@@ -124,7 +124,7 @@ plot(fdi_raw_mean_fd_opt, main = "Mean of Optimized Raw FDI Functions", xlab = "
 
 
 ###############################################################################
-# Section 13: Summary Statistics for GRW, FDI, and IPC
+# Section 3: Summary Statistics for GRW, FDI, and IPC
 ###############################################################################
 
 # Function to compute summary statistics
@@ -182,14 +182,19 @@ compute_summary_stats <- function(fd_obj, var_name) {
 }
 
 # Compute and display summary statistics for GRW
-compute_summary_stats(grw_fd, "GDP Growth (GRW)")
+compute_summary_stats(grw_fd_opt, "GDP Growth (GRW)")
 
 # Compute and display summary statistics for IPC
-compute_summary_stats(ipc_fd, "GDP per Capita (IPC)")
+compute_summary_stats(ipc_fd_opt, "GDP per Capita (IPC)")
 
 # Compute and display summary statistics for FDI
-compute_summary_stats(fdi_fd, "Financial Development Index (FDI)")
+compute_summary_stats(fdi_fd_opt, "Financial Development Index (FDI)")
 
+# Compute and display summary statistics for IPC
+compute_summary_stats(ipc_raw_fd_opt, "GDP per Capita (IPC)")
+
+# Compute and display summary statistics for FDI
+compute_summary_stats(fdi_raw_fd_opt, "Financial Development Index (FDI)")
 
 ###############################################################################
 # OR Defining Basis Functions for Functional Data Smoothing
@@ -209,7 +214,7 @@ ipc_fdPar <- fdPar(ipc_basis, Lfdobj = 2, lambda = 0.0001)  # For GDP per capita
 fdi_fdPar <- fdPar(fdi_basis, Lfdobj = 2, lambda = 0.0001)  # For FDI
 
 ###############################################################################
-# Section 3: Smoothing the Functional Data
+# Section 4: Smoothing the Functional Data
 ###############################################################################
 
 # Smooth the data using the defined basis and functional parameters
@@ -224,7 +229,7 @@ fdi_y2c <- smooth.basis(Time, fdi, fdi_basis)$y2cMap
 
 
 # Load regional data and align with country data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
+regional <- read.csv("Category.csv")
 
 # Replace periods (.) with spaces in the grw column names
 colnames(grw) <- gsub("\\.", " ", colnames(grw))
@@ -238,7 +243,7 @@ regional_cleaned <- regional_cleaned[match(countries, regional_cleaned$Country),
 sum(is.na(regional_cleaned$Country))  # This should be 0 if all matches are correct
 
 ###############################################################################
-# Section 4: Registration of Functional Data
+# Section 5: Registration of Functional Data
 ###############################################################################
 
 # Define a more flexible basis for the warping functions
@@ -448,11 +453,11 @@ if (!exists("result")) {
 }
 
 ###############################################################################
-# Section 5: Functional Regression Analysis
+# Section 6: Functional Regression Analysis
 ###############################################################################
 
 # Re-define the number of basis functions if needed
-nbasis <- 6  # Adjust as needed;
+nbasis <- 6 
 
 # Use the registered functional data
 grw_fd <- grw_fd_registered$registered$regfd  # Registered GDP growth functions
@@ -523,10 +528,8 @@ plot(beta_estimates[[3]], main = "Beta 2 (FDI)")
 plot(beta_estimates[[4]], main = "Beta 3 (IPC * FDI Interaction)")
 
 ###############################################################################
-# Section 6: Functional Regression using 'refund' Package
+# Section 7: Functional Regression using 'refund' Package
 ###############################################################################
-
-
 
 # Define a fine grid over the time domain
 finegrid <- seq(min(Time), max(Time), length.out = 100)
@@ -610,6 +613,16 @@ summary(gam_model)
 
 # plot(gam_model)
 
+qq.gam(
+  gam_model,
+  rep = 0,
+  level = 0.9,
+  s.rep = 10,
+  type = c("deviance", "pearson", "response"),
+  pch = ".",
+  rl.col = 2,
+  rep.col = "gray80")
+
 # Function to plot the estimated coefficient surfaces from 'gam' model
 plot_beta_surface_gam <- function(gam_model, term_label, predictor_name) {
   # Generate a grid for predictor and time
@@ -637,8 +650,6 @@ plot_beta_surface_gam <- function(gam_model, term_label, predictor_name) {
   # Reshape to matrix
   effect_matrix <- matrix(pred_effect, nrow = length(predictor_vals), ncol = length(t_vals))
   
-  # Plot the surface using plotly
-  library(plotly)
   
   plot_ly(
     x = predictor_vals,
@@ -664,11 +675,11 @@ plot_beta_surface_gam(gam_model, "te(ipc_fdi,t)", "ipc_fdi")
 
 
 ###############################################################################
-# Section 7: Statistical Analysis and Inference
+# Section 8: Statistical Analysis and Inference
 ###############################################################################
 
 # Load regional data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
+regional <- read.csv("Category.csv")
 
 # After data cleaning, get the list of countries
 countries <- colnames(grw)
@@ -734,27 +745,8 @@ for (level in unique_Income.Range) {
 # View Wilcoxon test results for income levels
 print(wilcox_results_income)
 
-# Plot coefficients with confidence bands
-for (i in 1:length(fRegress_result$betaestlist)) {
-  beta_fd <- fRegress_result$betaestlist[[i]]$fd
-  beta_stderr_fd <- stderr_list$betastderrlist[[i]]
-  
-  beta_values <- eval.fd(Time, beta_fd)
-  stderr_values <- eval.fd(Time, beta_stderr_fd)
-  
-  # Compute confidence bands
-  upper_band <- beta_values + 2 * stderr_values
-  lower_band <- beta_values - 2 * stderr_values
-  
-  # Plot beta function and confidence bands
-  plot(Time, beta_values, type = 'l', lwd = 2, main = paste("Beta", i - 1, "with 2-SE Confidence Band"), ylab = "Coefficient")
-  lines(Time, upper_band, col = 'blue', lty = 2)
-  lines(Time, lower_band, col = 'blue', lty = 2)
-  legend("topright", legend = c("Estimate", "Confidence Band"), col = c("black", "blue"), lty = c(1, 2))
-}
-
 # Boxplot visualization of depth values by region and income level
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
+regional <- read.csv("Category.csv")
 
 regional <- regional[regional$Country %in% countries, ]
 regional <- regional[match(countries, regional$Country), ]
@@ -763,46 +755,13 @@ regional <- regional[match(countries, regional$Country), ]
 region <- regional$Region
 income_level <- regional$Income.Range
 
-b1 <- boxplot(grw_fd, method = "MBD")
-DM <- b1$depth
+b1 <- boxplot(grw_fd, method = "Both", xlab = "Time", ylab = "Grw")
+b2 <- boxplot(ipc_fd, method = "Both", xlab = "Time", ylab = "Ipc")
+b3 <- boxplot(fdi_fd, method = "Both", xlab = "Time", ylab = "Fdi")
 
-# Create data frame for plotting
-depth_data <- data.frame(
-  Depth = DM,
-  Region = factor(region),
-  IncomeLevel = factor(income_level)
-)
+# DM <- b1$depth
 
-# Load ggplot2 for plotting
-library(ggplot2)
 
-# Boxplot of depth by region
-ggplot(depth_data, aes(x = Region, y = Depth)) +
-  geom_boxplot(fill = "lightblue") +
-  labs(title = "Depth Values by Region", x = "Region", y = "Depth") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# Boxplot of depth by income level
-ggplot(depth_data, aes(x = IncomeLevel, y = Depth)) +
-  geom_boxplot(fill = "lightgreen") +
-  labs(title = "Depth Values by Income Level", x = "Income Level", y = "Depth") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# Use ggpubr for adding statistical comparisons
-library(ggpubr)
-
-# For regions
-ggboxplot(depth_data, x = "Region", y = "Depth", fill = "Region") +
-  stat_compare_means(method = "wilcox.test", label = "p.signif") +
-  labs(title = "Depth Values by Region", x = "Region", y = "Depth") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# For income levels
-ggboxplot(depth_data, x = "IncomeLevel", y = "Depth", fill = "IncomeLevel") +
-  stat_compare_means(method = "wilcox.test", label = "p.signif") +
-  labs(title = "Depth Values by Income Level", x = "Income Level", y = "Depth") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-par(mfrow = c(1, 1))  # Reset layout
 # Compute and plot acceleration (second derivative) for GRW data
 accel_fd <- deriv.fd(grw_fd, deriv = 2)
 accel_values <- eval.fd(Time, accel_fd)
@@ -817,6 +776,7 @@ mean_accel <- rowMeans(accel_values)
 lines(Time, mean_accel, col = 'red', lwd = 2)
 legend("topright", legend = c("Mean Acceleration"), col = c("red"), lty = 1, lwd = 2)
 par(mfrow = c(1, 1))  # Reset layout
+
 # Compute and plot acceleration for FDI data
 accel_fd <- deriv.fd(fdi_fd, deriv = 2)
 accel_values <- eval.fd(Time, accel_fd)
@@ -852,6 +812,7 @@ ggplot(accel_data, aes(x = Region, y = MeanAcceleration)) +
   labs(title = "Mean Acceleration by Region", x = "Region", y = "Mean Acceleration") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 par(mfrow = c(1, 1))  # Reset layout
+
 # Plot mean acceleration by income level
 ggplot(accel_data, aes(x = IncomeLevel, y = MeanAcceleration)) +
   geom_boxplot(fill = "purple") +
@@ -860,16 +821,8 @@ ggplot(accel_data, aes(x = IncomeLevel, y = MeanAcceleration)) +
 par(mfrow = c(1, 1))  # Reset layout
 
 
-# Perform ANOVA for region
-anova_accel_region <- aov(MeanAcceleration ~ Region, data = accel_data)
-summary(anova_accel_region)
-
-# Perform ANOVA for income level
-anova_accel_income <- aov(MeanAcceleration ~ IncomeLevel, data = accel_data)
-summary(anova_accel_income)
-
 ###############################################################################
-# Section 8: Functional Regression by Regions and Income Levels
+# Section 9: Functional Regression by Regions and Income Levels
 ###############################################################################
 
 # Function to perform regression for a subset of countries
@@ -920,8 +873,17 @@ perform_regression <- function(country_indices, group_name) {
   )
 }
 
+regional <- read.csv("Category.csv")
+
+regional <- regional[regional$Country %in% countries, ]
+regional <- regional[match(countries, regional$Country), ]
+
+# Extract region and income level vectors
+region <- regional$Region
+income_level <- regional$Income.Range
+
 # Get unique regions
-unique_regions <- levels(regions)
+unique_regions <- unique(region)
 
 # Initialize a list to store regression results
 regression_results_regions <- list()
@@ -940,14 +902,14 @@ for (region in unique_regions) {
 }
 
 # Get unique income levels
-unique_income_levels <- levels(income_level)
+unique_income_levels <- unique(income_level)
 
 # Initialize a list to store regression results
 regression_results_income <- list()
 
 for (level in unique_income_levels) {
   # Get indices of countries in this income level
-  country_indices <- which(income_levels == level)
+  country_indices <- which(income_level == level)
   
   # Check if there are enough countries
   if (length(country_indices) >= 2) {
@@ -986,7 +948,7 @@ beta3_fd <- fRegress_result$betaestlist[[4]]$fd  # Interaction term beta3
 beta3_values <- eval.fd(Time, beta3_fd)
 
 ###############################################################################
-# Section 9: Principal Component Analysis (PCA)
+# Section 10: Principal Component Analysis (PCA)
 ###############################################################################
 
 # Perform PCA on the registered GRW data
@@ -1009,7 +971,7 @@ plot(pca_fdi$harmonics, main = "Principal Components of Registered FDI Data")
 print(pca_fdi$varprop)
 
 ###############################################################################
-# Section 10: Clustering Analysis
+# Section 11: Clustering Analysis
 ###############################################################################
 
 # Analyze the IPC * FDI interaction term from 'gam' model
@@ -1118,8 +1080,6 @@ country_summary <- data.frame(
 )
 
 # Perform PCA on the interaction effects
-library(refund)
-library(fda)
 
 # Create a functional data object from the country interaction effects
 interaction_fd <- Data2fd(argvals = finegrid, y = t(country_interaction_effects))
@@ -1155,8 +1115,6 @@ kmeans_result <- kmeans(country_data[, c("NegativeProportion", "PC1", "PC2", "PC
 # Add cluster assignments to the data frame
 country_data$Cluster <- factor(kmeans_result$cluster)
 
-library(ggplot2)
-
 # Plot the clusters using the first two principal components
 ggplot(country_data, aes(x = PC1, y = PC2, color = Cluster, label = Country)) +
   geom_point(size = 3) +
@@ -1165,7 +1123,7 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = Cluster, label = Country)) +
   theme_minimal()
 
 # Load region and income level data
-regional <- read.csv("Country_Income_Region_Info_Completed_excel.csv")
+regional <- read.csv("Category.csv")
 
 # Ensure alignment
 regional <- regional[match(country_data$Country, regional$Country), ]
@@ -1195,109 +1153,8 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = IncomeLevel, shape = Cluster)
   theme_minimal()
 
 
-
 ###############################################################################
-# Section 8: Functional Regression by Regions and Income Levels (Revised)
-###############################################################################
-
-# Function to perform regression for a subset of countries
-perform_regression <- function(country_indices, group_name) {
-  # Subset the functional data objects
-  grw_fd_subset <- grw_fd[country_indices]
-  ipc_fd_subset <- ipc_fd[country_indices]
-  fdi_fd_subset <- fdi_fd[country_indices]
-  
-  # Recompute the interaction term
-  ipc_eval_subset <- eval.fd(Time, ipc_fd_subset)
-  fdi_eval_subset <- eval.fd(Time, fdi_fd_subset)
-  ipc_fdi_interaction_subset <- ipc_eval_subset * fdi_eval_subset
-  ipc_fdi_fd_subset <- smooth.basis(Time, ipc_fdi_interaction_subset, ipc_basis)$fd
-  
-  # Define the intercept
-  const_basis <- create.constant.basis(rangeval)
-  const_fd <- fd(matrix(1, 1, length(country_indices)), const_basis)
-  
-  # Define the list of predictors
-  X_list_subset <- list(
-    const = const_fd,
-    ipc_fd = ipc_fd_subset,
-    fdi_fd = fdi_fd_subset,
-    ipc_fdi_fd = ipc_fdi_fd_subset
-  )
-  
-  # Define basis for beta functions
-  beta_basis <- create.fourier.basis(rangeval, nbasis)
-  betalist <- list(
-    const = fdPar(const_basis),
-    ipc_fd = fdPar(beta_basis),
-    fdi_fd = fdPar(beta_basis),
-    ipc_fdi_fd = fdPar(beta_basis)
-  )
-  
-  # Perform the functional regression
-  fRegress_result <- fRegress(grw_fd_subset, X_list_subset, betalist)
-  
-  # Extract beta functions
-  beta_estimates <- fRegress_result$betaestlist
-  
-  # Plot beta functions
-  par(mfrow = c(2, 2))  # Set up layout for plotting
-  for (i in 1:length(beta_estimates)) {
-    beta_fd <- beta_estimates[[i]]$fd
-    plot(beta_fd, main = paste("Beta", i - 1, "for", group_name))
-  }
-  par(mfrow = c(1, 1))  # Reset layout
-  
-  # Return results
-  list(
-    fRegress_result = fRegress_result,
-    beta_estimates = beta_estimates,
-    group_name = group_name
-  )
-}
-
-# Get unique regions
-unique_regions <- unique(regions)
-
-# Initialize a list to store regression results
-regression_results_regions <- list()
-
-for (region in unique_regions) {
-  # Get indices of countries in this region
-  country_indices <- which(regions == region)
-  
-  # Check if there are enough countries (at least equal to the number of predictors)
-  if (length(country_indices) >= 4) {
-    result <- perform_regression(country_indices, region)
-    regression_results_regions[[region]] <- result
-  } else {
-    cat("Not enough countries in region:", region, "\n")
-  }
-}
-
-# Get unique income levels
-unique_income_levels <- unique(income_level)
-
-# Initialize a list to store regression results
-regression_results_income <- list()
-
-for (level in unique_income_levels) {
-  # Get indices of countries in this income level
-  country_indices <- which(income_level == level)
-  
-  # Check if there are enough countries (at least equal to the number of predictors)
-  if (length(country_indices) >= 4) {
-    result <- perform_regression(country_indices, level)
-    regression_results_income[[level]] <- result
-  } else {
-    cat("Not enough countries in income level:", level, "\n")
-  }
-}
-
-
-
-###############################################################################
-# Section 11: Covariance Heat Maps and 3D Plots
+# Section 12: Covariance Heat Maps and 3D Plots
 ###############################################################################
 
 # Function to compute and plot covariance heat map and 3D surface
@@ -1352,7 +1209,7 @@ plot_covariance(fdi_fd, "Financial Development Index (FDI)")
 
 
 ###############################################################################
-# Section 12: Heatmaps of Beta Surfaces
+# Section 13: Heatmaps of Beta Surfaces
 ###############################################################################
 
 # Function to plot heatmap of beta surface
