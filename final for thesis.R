@@ -1,3 +1,10 @@
+# Start redirecting all output to "output.txt"
+sink("output.txt")
+
+# All output below will be saved to "output.txt"
+cat("This is a cat() output.\n")
+print("This is a print() output.")
+
 ###############################################################################
 # Section 1: Data Loading and Preprocessing
 ###############################################################################
@@ -12,7 +19,7 @@ library(mgcv)
 options(warn=-1)
 
 # Set working directory to where the data files are located
-setwd("~/Desktop/New Folder With Items/")
+setwd("C:/Users/MEDIA MARK/Desktop/thesis/")
 
 # Load data from CSV files
 grw = read.csv("GDP g.csv")  # Diff GDP growth data vs USA
@@ -463,7 +470,7 @@ if (!exists("result")) {
 ###############################################################################
 
 # Re-define the number of basis functions if needed
-nbasis <- 33 
+nbasis <- 33
 
 # Use the registered functional data
 grw_fd <- grw_fd_registered$registered$regfd  # Registered GDP growth functions
@@ -618,7 +625,7 @@ gam_model <- gam(
 # Summarize the model
 summary(gam_model)
 
-# plot(gam_model)
+plot(gam_model)
 
 qq.gam(
   gam_model,
@@ -973,111 +980,6 @@ print(pca_fdi$varprop)
 # Section 11: Clustering Analysis
 ###############################################################################
 
-# Analyze the IPC * FDI interaction term from 'gam' model
-
-# Extract the smooth terms from the model
-summary(pffr_model)$s.table
-
-# Get the estimated coefficients for the interaction term
-interaction_term_label <- "te(ipc_fdi,t)"
-interaction_smooth <- gam_model$smooth[[which(sapply(gam_model$smooth, function(x) x$label) == interaction_term_label)]]
-
-# Generate a grid over s (ipc_fdi) and t (time)
-s_vals <- seq(min(data_long$ipc_fdi), max(data_long$ipc_fdi), length.out = 100)
-t_vals <- finegrid  # Time grid
-
-# Create a grid for prediction
-pred_grid <- expand.grid(ipc_fdi = s_vals, t = t_vals)
-pred_grid$ipc <- 0
-pred_grid$fdi <- 0
-
-# Predict the effect of the interaction term
-interaction_effect <- predict(
-  gam_model,
-  newdata = pred_grid,
-  type = "terms",
-  terms = interaction_term_label
-)
-
-# Reshape the predicted effects into a matrix
-interaction_matrix <- matrix(interaction_effect, nrow = length(s_vals), ncol = length(t_vals))
-
-# Identify where the interaction effect is negative
-negative_indices <- interaction_matrix < 0
-
-# Calculate the proportion of negative values
-proportion_negative <- sum(negative_indices) / length(interaction_matrix)
-print(paste("Proportion of negative beta(s, t) values:", round(proportion_negative, 4)))
-
-# Plot the regions where beta(s, t) is negative
-library(plotly)
-
-plot_ly(
-  x = s_vals,
-  y = t_vals,
-  z = interaction_matrix,
-  type = "surface",
-  surfacecolor = interaction_matrix < 0,
-  colorscale = list(c(0, 1), c("red", "blue")),
-  showscale = FALSE
-) %>%
-  layout(
-    title = "Beta(s, t) Surface for IPC * FDI Interaction (Blue regions are negative)",
-    scene = list(
-      xaxis = list(title = "IPC * FDI (s)"),
-      yaxis = list(title = "Time (t)"),
-      zaxis = list(title = "Beta(s, t)")
-    )
-  )
-
-# Number of countries and time points
-n_countries <- nrow(Y_mat)
-n_time <- ncol(Y_mat)
-
-# Initialize a matrix to store the interaction effects for each country over time
-country_interaction_effects <- matrix(0, nrow = n_countries, ncol = n_time)
-
-for (i in 1:n_countries) {
-  # Extract the predictor function for the interaction term for country i
-  ipc_fdi_i <- ipc_fdi_mat[i, ]
-  
-  # For each time point t, compute the effect
-  for (t_idx in 1:n_time) {
-    # For the predictor value ipc_fdi_i at s and time t
-    s_val <- ipc_fdi_i
-    t_val <- finegrid[t_idx]
-    
-    # Create a data frame for prediction
-    pred_data <- data.frame(
-      ipc_fdi = s_val,
-      t = rep(t_val, length(s_val)),
-      ipc = rep(0, length(s_val)),
-      fdi = rep(0, length(s_val))
-    )
-    
-    # Predict the effect
-    effect <- predict(
-      gam_model,
-      newdata = pred_data,
-      type = "terms",
-      terms = interaction_term_label
-    )
-    
-    # Integrate over s (assuming equal spacing)
-    delta_s <- s_vals[2] - s_vals[1]
-    country_interaction_effects[i, t_idx] <- sum(effect) * delta_s
-  }
-}
-
-# Compute summary statistics for each country
-country_negative_proportions <- apply(country_interaction_effects < 0, 1, mean)
-countries <- countries[countries != "United.States"]
-
-country_summary <- data.frame(
-  Country = countries,
-  NegativeProportion = country_negative_proportions
-)
-
 # Perform PCA on the interaction effects
 
 # Create a functional data object from the country interaction effects
@@ -1153,65 +1055,7 @@ ggplot(country_data, aes(x = PC1, y = PC2, color = IncomeLevel, shape = Cluster)
 
 
 ###############################################################################
-# Section 12: Covariance Heat Maps and 3D Plots
-###############################################################################
-
-# Function to compute and plot covariance heat map and 3D surface
-plot_covariance <- function(fd_obj, var_name) {
-  # Evaluate the functional data at fine grid points
-  finegrid <- seq(min(Time), max(Time), length.out = 100)
-  fd_values <- eval.fd(finegrid, fd_obj)
-  
-  # Compute the covariance matrix
-  cov_matrix <- cov(t(fd_values))
-  
-  # Plot heat map
-  library(ggplot2)
-  library(reshape2)
-  
-  cov_df <- melt(cov_matrix)
-  colnames(cov_df) <- c("Time1", "Time2", "Covariance")
-  
-  ggplot(cov_df, aes(x = Time1, y = Time2, fill = Covariance)) +
-    geom_tile() +
-    scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
-    labs(title = paste("Covariance Heat Map of", var_name), x = "Time", y = "Time") +
-    theme_minimal()
-  
-  # 3D Surface Plot
-  library(plotly)
-  
-  plot_ly(
-    x = finegrid,
-    y = finegrid,
-    z = cov_matrix,
-    type = "surface"
-  ) %>%
-    layout(
-      title = paste("Covariance Surface Plot of", var_name),
-      scene = list(
-        xaxis = list(title = "Time"),
-        yaxis = list(title = "Time"),
-        zaxis = list(title = "Covariance")
-      )
-    )
-}
-
-# Plot covariance heat map and 3D plot for GRW
-plot_covariance(grw_fd, "GDP Growth (GRW)")
-
-# Plot covariance heat map and 3D plot for IPC
-plot_covariance(ipc_fd, "GDP per Capita (IPC)")
-
-# Plot covariance heat map and 3D plot for FDI
-plot_covariance(fdi_fd, "Financial Development Index (FDI)")
-
-plot_covariance(ipc_fdi_fd, "Financial Development Index (FDI)")
-
-
-
-###############################################################################
-# Section 13: Heatmaps of Beta Surfaces
+# Section 12: Heatmaps of Beta Surfaces
 ###############################################################################
 
 # Function to plot heatmap of beta surface
@@ -1262,3 +1106,169 @@ plot_beta_heatmap(gam_model, "te(fdi,t)", "fdi")
 plot_beta_heatmap(gam_model, "te(ipc_fdi,t)", "ipc_fdi")
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(plotly)
+library(ggplot2)
+library(mgcv)
+library(reshape2)
+
+# Extract beta functions from fRegress_result
+beta_estimates <- fRegress_result$betaestlist
+
+# Beta functions
+beta0_fd <- beta_estimates$const$fd       # Intercept
+beta_ipc_fd <- beta_estimates$ipc_fd$fd   # Beta for IPC
+beta_fdi_fd <- beta_estimates$fdi_fd$fd   # Beta for FDI
+beta_inter_fd <- beta_estimates$ipc_fdi_fd$fd  # Beta for IPC * FDI interaction
+
+# Define the time grid
+Time <- seq(1980, 2020, length.out = 100)
+
+# Evaluate beta functions over the time grid
+beta_ipc_values <- eval.fd(Time, beta_ipc_fd)
+beta_fdi_values <- eval.fd(Time, beta_fdi_fd)
+beta_inter_values <- eval.fd(Time, beta_inter_fd)
+
+
+# Load necessary library
+library(plotly)
+
+# Create data frame for plotting
+plot_data <- data.frame(
+  Time = Time,
+  Beta_FDI = beta_fdi_values,
+  Beta_Interaction = beta_inter_values
+)
+
+
+# Create scatter plot with horizontal line at y = 0
+ggplot(heatmap_data, aes(x = Time, y = Beta_FDI, color = Beta_Interaction)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0, color = "red", linetype = "solid", size = 0.8) +  # Adds red line at y = 0
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Beta Interaction vs Beta FDI over Time",
+    x = "Time",
+    y = "Beta FDI",
+    color = "Beta Interaction"
+  ) +
+  theme_minimal()
+
+
+# Assuming beta_ipc_values, beta_inter_values, and Time are already defined in your environment
+# Assuming beta_ipc_values, beta_inter_values, and Time are already defined in your environment
+
+# Create data frame for plotting
+plot_data <- data.frame(
+  Time = Time,
+  Beta_c = - (beta_ipc_values / beta_inter_values)
+)
+
+# Limit Beta_c to the boundaries of ±2
+plot_data$Beta_c <- pmax(pmin(plot_data$Beta_c, 2), -2)
+
+# Create a column to indicate positive or negative values
+plot_data$Sign <- ifelse(plot_data$Beta_c >= 0, "Positive", "Negative")
+
+# Load ggplot2 library
+library(ggplot2)
+
+# Plot Beta_c over Time with color based on positive or negative values (Scatter Plot)
+ggplot(plot_data, aes(x = Time, y = Beta_c, color = Sign)) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c("Positive" = "blue", "Negative" = "red")) +
+  ylim(-2, 2) +
+  labs(
+    title = expression("Scatter Plot of " ~ F[c] ~ " over Time"),
+    x = "Time",
+    y = expression(F[c] == -beta[IPC]/beta[Interaction])
+  ) +
+  theme_minimal()
